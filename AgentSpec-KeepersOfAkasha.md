@@ -288,6 +288,3 @@ fair will take more time than writing the code around it.
    test targets on day one.
 
 ---
-
-*Sections 7, 8, 10, 13, 14, and 16 are not required by tomorrow's deadline —
-fill them in once you're building, they'll be easier to answer by then.*
