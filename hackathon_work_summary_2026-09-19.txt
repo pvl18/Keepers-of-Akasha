@@ -1,0 +1,370 @@
+AGENT-A-THON 2026 — WORK COMPLETED TODAY
+================================================
+
+Date: 19 September 2026
+
+PROJECT OVERVIEW
+----------------
+We continued building the autonomous personal learning agent for the Agent-a-thon. The work completed today focused on turning the reasoning-check idea into an actual multi-step agentic workflow with persistent state, AI evaluation, retries, hints, flagging, and a professor review path.
+
+The current implementation is centered around Industrial Biotechnology laboratory reasoning scenarios.
+
+1. DATABASE / PERSISTENT STATE
+------------------------------
+We developed and organized a SQLite-based persistence layer.
+
+Database:
+- SQLite database: data/Learning_agent.db
+- Foreign-key support is enabled.
+- Database initialization creates all required tables.
+
+Tables implemented:
+- users
+- concepts
+- runs
+- attempts
+- evaluations
+- flags
+- professor_reviews
+
+The database stores:
+- Student information
+- Learning concepts and difficulty/action information
+- Individual learning runs
+- Generated scenarios
+- Expected reasoning
+- Current attempt number
+- Student responses
+- AI evaluation results
+- Reasoning feedback and hints
+- Flagged runs
+- Professor decisions and comments
+- Run/record timestamps
+
+Database functions implemented include:
+- create_user()
+- create_concept()
+- create_run()
+- save_attempt()
+- save_evaluation()
+- update_run_status()
+- save_flag()
+- get_flagged_students()
+- save_professor_review()
+- get_run_details()
+- get_complete_run_details()
+
+A database abstraction layer was also created using LearningAgentDatabase and SQLiteLearningAgentDatabase so the rest of the application can interact with the database through a defined interface.
+
+The complete-run retrieval function was designed to reconstruct the full learning history, including attempts and their evaluations, allowing an existing reasoning run to be resumed.
+
+2. AGENT STATE MACHINE
+----------------------
+We implemented the main agent workflow in agent.py.
+
+States currently defined:
+- GENERATING
+- AWAITING_RESPONSE
+- EVALUATING
+- PASSED
+- FLAGGED
+- REVIEWED
+
+Maximum attempts:
+- 3 attempts per reasoning run
+
+Main workflow:
+
+GENERATING
+    ↓
+Scenario generated
+    ↓
+Run persisted in SQLite
+    ↓
+AWAITING_RESPONSE
+    ↓
+Student submits answer
+    ↓
+EVALUATING
+    ↓
+AI evaluates reasoning
+    ↓
+ ┌───────────────┐
+ │               │
+PASS           RETRY
+ │               │
+PASSED       Hint + retry
+                 │
+                 ↓
+        AWAITING_RESPONSE
+                 │
+          up to 3 attempts
+                 │
+                 ↓
+              FLAGGED
+                 │
+                 ↓
+        Professor review
+
+The agent checks the persisted run state before accepting an answer, preventing answers from being submitted when the run is not in the correct state.
+
+3. SCENARIO GENERATION
+----------------------
+We created a scenario-generation module for Industrial Biotechnology reasoning checks.
+
+Current scenario concepts include:
+- Gram Staining
+- Thin Layer Chromatography (TLC)
+- Fermentation
+- Protein Purification
+- Aseptic Techniques
+- Enzyme Activity Assays
+- Microscopy
+- Spectrophotometry
+- Centrifugation
+- pH Measurement
+
+Each scenario is designed around a laboratory situation where the student must explain:
+- What happened
+- Why it happened
+- How the experimental condition/procedure caused the observed result
+
+Examples:
+- Gram staining: excessive decolorization produces an unusually pale slide.
+- TLC: incorrect solvent level causes poor/distorted separation.
+- Fermentation: unexpectedly low product formation requires investigation of process conditions.
+- Protein purification: target protein appears in the discarded fraction.
+- Aseptic technique: unexpected microbial growth appears in a control.
+- Enzyme assay: measured activity is lower than expected.
+- Microscopy: image quality is poor.
+- Spectrophotometry: absorbance is unexpectedly high.
+- Centrifugation: little material forms the expected pellet.
+- pH measurement: measured pH differs significantly from the expected value.
+
+4. AI EVALUATION
+----------------
+We implemented an AI-based reasoning evaluator.
+
+The evaluator uses an OpenAI-compatible client through OpenRouter and is configured with:
+- Model: openai/gpt-5-mini
+- Temperature: 0
+
+The evaluator is explicitly instructed to treat the student's response as untrusted data and to evaluate it only as an answer to the scenario.
+
+Evaluation focuses on scientific reasoning rather than:
+- Exact wording
+- Grammar
+- Spelling
+- Writing style
+
+The evaluator checks whether the student connects the cause/mechanism to the observed result.
+
+Three evaluation categories are used:
+- STRONG — relevant cause/mechanism is identified and clearly connected to the result.
+- PARTIAL — relevant understanding is present but the explanation is incomplete or unclear.
+- MISSING — relevant reasoning is absent, unrelated, or insufficient.
+
+The evaluator returns only:
+- strong
+- partial
+- missing
+
+5. REASONING LOOP
+-----------------
+We also built a standalone reasoning-loop implementation.
+
+Flow:
+- Display available concepts
+- Student selects a concept
+- Scenario is generated
+- Student provides reasoning
+- AI evaluates the response
+- Strong answer → reasoning check passed
+- Partial/missing → targeted hint + retry
+- After 3 unsuccessful attempts → flagged for professor review
+
+Hints currently adapt to the evaluation result:
+- Partial: encourages the student to explain more clearly why the identified cause leads to the observed result.
+- Missing: prompts the student to think about what changed and how that change could cause the observed result.
+
+This provides the core adaptive intervention loop required for the agentic learning workflow.
+
+6. RESUME / STATE PERSISTENCE
+-----------------------------
+The system can resume an existing learning run using resume_run().
+
+The persisted state includes:
+- Run information
+- Current status
+- Current attempt
+- Previous attempts
+- Student responses
+- Evaluations
+- Hints
+- Scenario information
+- Concept information
+
+This demonstrates state persistence across multiple steps rather than treating every interaction as an independent prompt.
+
+7. FLAGGING + PROFESSOR REVIEW
+------------------------------
+When a student fails to demonstrate sufficient reasoning after 3 attempts:
+- The run is flagged.
+- A reason is stored.
+- The run status becomes FLAGGED.
+- The flagged record can be retrieved for professor review.
+
+The database includes a professor_reviews table.
+
+Professor review stores:
+- Flag ID
+- Decision
+- Comments
+- Timestamp
+
+The flag status is then updated according to the professor's decision.
+
+This establishes the human-in-the-loop mechanism:
+Student → AI intervention → repeated attempts → Flag → Professor → Decision/feedback → persisted record
+
+8. STUDENT + PROFESSOR UI PROTOTYPE
+-----------------------------------
+We created a Streamlit interface prototype.
+
+Student workspace includes:
+- Student ID input
+- Concept selection
+- Generate scenario button
+- Scenario display
+- Reasoning text area
+- Submit reasoning button
+- Feedback preview
+- Attempt history section
+- Attempt availability indicator
+
+Professor dashboard includes:
+- Active runs
+- Passed today
+- Runs needing review
+- Table of runs requiring attention
+- Student
+- Concept
+- Attempts
+- Status
+
+The UI is currently a frontend prototype with clearly identified backend connection points.
+
+The visual design uses:
+- Clean laboratory/academic theme
+- Wide Streamlit layout
+- Sidebar navigation
+- Student workspace
+- Professor dashboard
+- Scenario cards
+- Progress/metric cards
+
+9. IMPORTANT ARCHITECTURE / AGENTIC FEATURES NOW PRESENT
+---------------------------------------------------------
+The implementation now demonstrates the main agentic requirements we were targeting:
+
+A. STATE PERSISTENCE
+- SQLite stores the complete learning-run state.
+- Existing runs can be resumed.
+
+B. MULTI-STEP WORKFLOW
+- Generate scenario
+- Persist run
+- Collect answer
+- Evaluate
+- Decide pass/retry
+- Give hint
+- Retry
+- Flag after repeated failure
+- Professor review
+
+C. AUTONOMOUS AI EVALUATION
+- The evaluator independently analyzes the student's reasoning using the scenario and expected reasoning context.
+
+D. ADAPTIVE INTERVENTION
+- Student responses influence the next action.
+- Partial/missing reasoning leads to feedback and another attempt.
+
+E. HUMAN-IN-THE-LOOP
+- Repeated unsuccessful attempts create a professor-review flag.
+- Professor decisions are stored back in the database.
+
+10. CURRENT FILE / MODULE STRUCTURE
+-----------------------------------
+Main modules worked on today:
+
+- database.py
+  Persistent SQLite storage and database API.
+
+- agent.py
+  Main state machine and learning-run orchestration.
+
+- evaluator.py
+  AI reasoning evaluation.
+
+- reasoning_loop.py
+  Standalone reasoning-check loop with retries and hints.
+
+- scenario_generator.py
+  Industrial Biotechnology scenario definitions and generation.
+
+- user_interface.py
+  Streamlit student/professor UI prototype.
+
+11. CURRENT END-TO-END CONCEPT
+------------------------------
+The system we have built today can be summarized as:
+
+Student selects a biotechnology concept
+        ↓
+Agent generates/selects a laboratory scenario
+        ↓
+Scenario + expected reasoning are persisted
+        ↓
+Student explains the result
+        ↓
+AI evaluates scientific reasoning
+        ↓
+Strong → PASS
+        │
+        └── Partial/Missing
+                 ↓
+              Hint
+                 ↓
+             Retry
+                 ↓
+           Up to 3 attempts
+                 ↓
+              FLAGGED
+                 ↓
+        Professor Dashboard
+                 ↓
+        Human review/decision
+                 ↓
+       Decision persisted in DB
+
+12. WHAT THIS MEANS FOR THE HACKATHON
+-------------------------------------
+Today's work moved the project from a conceptual agent design toward a functioning agentic prototype.
+
+The strongest implemented components are:
+- Persistent database state
+- Explicit agent state machine
+- Multi-step reasoning workflow
+- AI-based evaluation
+- Adaptive hints
+- Three-attempt retry mechanism
+- Automatic flagging
+- Professor human-in-the-loop review
+- Student/professor interface prototype
+- Industrial Biotechnology-specific scenarios
+
+The next integration focus is to connect the Streamlit interface fully to the agent/database/evaluator pipeline, replace remaining demo/preview UI elements with live backend data, and test the complete end-to-end workflow.
+
+NOTE
+----
+This summary is based on the project files and work provided in this conversation today. Some UI sections are still marked as prototypes/backend connection points, so they should be treated as integration work rather than fully connected functionality.
