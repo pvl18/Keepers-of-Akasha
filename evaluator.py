@@ -146,12 +146,14 @@ def safe_evaluate(
             attempt=attempt
         )
 
-    except Exception:
-        return {
-            "quality": "missing",
-            "reasoning": "The evaluation could not be completed.",
-            "hint": "Think about the scientific cause of the observed result and try again."
-        }
+    except Exception as e:
+        print(f"Evaluator error: {e}")
+
+    return {
+        "quality": "missing",
+        "reasoning": "Evaluation could not be completed.",
+        "hint": "Try explaining the scientific mechanism more clearly."
+    }
 
 
 if __name__ == "__main__":
