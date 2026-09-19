@@ -1,4 +1,3 @@
-```python
 def generate_scenario(concept):
     scenarios = {
         "Gram staining": """
