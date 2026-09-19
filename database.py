@@ -1,10 +1,99 @@
 import sqlite3
+from abc import ABC, abstractmethod
 from pathlib import Path
 from datetime import datetime
 
 DB_DIR = Path("data")
 DB_DIR.mkdir(exist_ok=True)
 DB_PATH = DB_DIR / "Learning_agent.db"
+
+
+class LearningAgentDatabase(ABC):
+    @abstractmethod
+    def create_user(self, name):
+        """Create and return a user id for the supplied name."""
+
+    @abstractmethod
+    def create_concept(self, name, difficulty, what_to_do):
+        """Create and return a concept id for the supplied concept."""
+
+    @abstractmethod
+    def create_run(self, concept_id, user_id, scenario, expecting_reasoning):
+        """Create a new run and return its id."""
+
+    @abstractmethod
+    def save_attempt(self, run_id, attempt_number, student_response):
+        """Persist a student attempt and return its new id."""
+
+    @abstractmethod
+    def save_evaluation(self, attempt_id, quality, reasoning, hint):
+        """Store evaluation feedback for an attempt and return its id."""
+
+    @abstractmethod
+    def update_run_status(self, run_id, status):
+        """Update the status of the run."""
+
+    @abstractmethod
+    def save_flag(self, run_id, reason):
+        """Create a flag for a run and return the new flag id."""
+
+    @abstractmethod
+    def get_flagged_students(self):
+        """Return pending flagged students in reverse chronological order."""
+
+    @abstractmethod
+    def save_professor_review(self, flag_id, decision, comments):
+        """Save a professor review for a flagged submission."""
+
+    @abstractmethod
+    def get_run_details(self, run_id):
+        """Return a single run's summary fields."""
+
+    @abstractmethod
+    def get_complete_run_details(self, run_id):
+        """Return the full run context including attempts and feedback."""
+
+
+class SQLiteLearningAgentDatabase(LearningAgentDatabase):
+    def __init__(self, db_path=DB_PATH):
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(exist_ok=True, parents=True)
+        init_db()
+
+    def create_user(self, name):
+        return create_user(name)
+
+    def create_concept(self, name, difficulty, what_to_do):
+        return create_concept(name, difficulty, what_to_do)
+
+    def create_run(self, concept_id, user_id, scenario, expecting_reasoning):
+        return create_run(concept_id, user_id, scenario, expecting_reasoning)
+
+    def save_attempt(self, run_id, attempt_number, student_response):
+        return save_attempt(run_id, attempt_number, student_response)
+
+    def save_evaluation(self, attempt_id, quality, reasoning, hint):
+        return save_evaluation(attempt_id, quality, reasoning, hint)
+
+    def update_run_status(self, run_id, status):
+        update_run_status(run_id, status)
+
+    def save_flag(self, run_id, reason):
+        return save_flag(run_id, reason)
+
+    def get_flagged_students(self):
+        return get_flagged_students()
+
+    def save_professor_review(self, flag_id, decision, comments):
+        return save_professor_review(flag_id, decision, comments)
+
+    def get_run_details(self, run_id):
+        return get_run_details(run_id)
+
+    def get_complete_run_details(self, run_id):
+        return get_complete_run_details(run_id)
+
+
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -105,7 +194,7 @@ def create_user(name):
     conn = get_connection()
     cursor = conn.cursor()
     created_at = datetime.now().isoformat()
-    cursor.execute('''INSERT INTO users (name, created_at) VALUES (?, ?)''', (name, datetime.now().isoformat()))
+    cursor.execute('''INSERT INTO users (name, created_at) VALUES (?, ?)''', (name, created_at))  
     user_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -115,7 +204,8 @@ def create_user(name):
 def create_concept(name, difficulty, what_to_do):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('''INSERT INTO concepts (name, difficulty, what_to_do) VALUES (?, ?, ?)''', (name, difficulty, what_to_do))
+    created_at = datetime.now().isoformat()
+    cursor.execute('''INSERT INTO concepts (name, difficulty, what_to_do, created_at) VALUES (?, ?, ?, ?)''', (name, difficulty, what_to_do, created_at))
     concept_id = cursor.lastrowid
     conn.commit()
     conn.close()
