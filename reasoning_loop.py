@@ -1,67 +1,83 @@
+from concepts import get_concepts
+from scenario_generator import generate_scenario
 from evaluator import evaluate_answer
 
 
-def get_hint(concept, result):
-    """
-    Give a small hint based on the evaluation result.
-    """
+MAX_ATTEMPTS = 3
 
+
+def give_hint(result):
     if result == "partial":
-        return f"Think about which step or condition in {concept} could have caused the unexpected result."
+        return "You are on the right track. Try explaining more clearly why the cause you identified leads to the observed result."
 
     if result == "missing":
-        return f"Focus on the main scientific reason behind what happened in the {concept} experiment."
+        return "Think about what changed in the scenario and how that change could cause the observed result."
 
     return ""
 
 
-def run_reasoning_loop(concept, scenario):
-    """
-    Run the student reasoning loop.
+def run_reasoning_check():
+    concepts = get_concepts()
 
-    The student gets up to 3 attempts.
-    A strong answer passes immediately.
-    After 3 unsuccessful attempts, the student is flagged.
-    """
+    print("\nAvailable concepts:\n")
 
+    for i, concept in enumerate(concepts, start=1):
+        print(f"{i}. {concept}")
+
+    while True:
+        try:
+            choice = int(input("\nChoose a concept number: "))
+
+            if 1 <= choice <= len(concepts):
+                break
+
+            print(f"Please choose a number from 1 to {len(concepts)}.")
+
+        except ValueError:
+            print("Please enter a valid number.")
+
+    concept = concepts[choice - 1]
+
+    scenario = generate_scenario(concept)
+
+    print(f"\nConcept: {concept}")
     print("\nScenario:")
     print(scenario)
 
-    for attempt in range(1, 4):
+    attempts = 0
 
-        print(f"\nAttempt {attempt} of 3")
-        student_answer = input("Your reasoning: ")
+    while attempts < MAX_ATTEMPTS:
+        attempts += 1
 
-        result = evaluate_answer(concept, student_answer)
+        print(f"\nAttempt {attempts} of {MAX_ATTEMPTS}")
 
-        print("Evaluation:", result)
+        student_answer = input("\nEnter your reasoning: ")
+
+        result = evaluate_answer(
+            concept,
+            scenario,
+            student_answer
+        )
+
+        print(f"\nAI Evaluation: {result}")
 
         if result == "strong":
-            print("\nPassed! Your reasoning shows a strong understanding.")
+            print("\nReasoning check passed.")
             return "passed"
 
-        if attempt < 3:
-            hint = get_hint(concept, result)
-            print("\nHint:", hint)
+        if attempts < MAX_ATTEMPTS:
+            hint = give_hint(result)
 
-        else:
-            print("\nThree unsuccessful attempts.")
-            print("This attempt will be flagged for professor review.")
-            return "flagged"
+            print("\nHint:")
+            print(hint)
+
+            print("\nTry again.")
+
+    print("\nYou have used all 3 attempts.")
+    print("Result: Flagged for professor review.")
+
+    return "flagged"
 
 
 if __name__ == "__main__":
-    concept = "Gram staining"
-
-    scenario = """
-A student performs Gram staining on a bacterial sample.
-They leave the decolorizer on for too long.
-The final slide appears much paler than expected.
-
-What do you think happened, and why did the decolorization time
-affect the result?
-"""
-
-    result = run_reasoning_loop(concept, scenario)
-
-    print("\nFinal status:", result)
+    run_reasoning_check()
