@@ -182,11 +182,28 @@ def save_flag(run_id, reason):
 def get_flagged_students():
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute('''SELECT u.name, f.reason FROM flags f JOIN runs r ON f.run_id = r.id JOIN users u ON r.user_id = u.id WHERE f.status = 'pending' ORDER BY f.created_at DESC''')
+
+    cursor.execute('''
+        SELECT
+            f.id AS flag_id,
+            f.run_id,
+            u.name AS student_name,
+            c.name AS concept_name,
+            f.reason,
+            f.status,
+            f.created_at
+        FROM flags f
+        JOIN runs r ON f.run_id = r.id
+        JOIN users u ON r.user_id = u.id
+        JOIN concepts c ON r.concept_id = c.id
+        WHERE f.status = 'pending'
+        ORDER BY f.created_at DESC
+    ''')
+
     flagged_students = cursor.fetchall()
     conn.close()
-    return [dict(student) for student in flagged_students]
 
+    return [dict(student) for student in flagged_students]
 #professor review function
 def save_professor_review(flag_id, decision, comments):
     conn = get_connection()
