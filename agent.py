@@ -41,7 +41,7 @@ def start_run(user_id, concept_id, concept_name):
     # STATE: GENERATING
     # ------------------------------------------
 
-    from ai_engine.generator import generate_scenario
+    from scenario_generator import generate_scenario
 
     scenario = generate_scenario(concept_name)
 
@@ -139,7 +139,6 @@ def submit_answer(run_id, student_response):
 
     attempt_number = state["current_attempt"] + 1
 
-    # Safety check
     if attempt_number > MAX_ATTEMPTS:
         raise ValueError(
             "Maximum number of attempts reached."
@@ -180,7 +179,7 @@ def submit_answer(run_id, student_response):
     # AI EVALUATION
     # ------------------------------------------
 
-    from ai_engine.evaluator import safe_evaluate
+    from evaluator import safe_evaluate
 
     evaluation = safe_evaluate(
         concept=concept,
@@ -206,7 +205,6 @@ def submit_answer(run_id, student_response):
     # ------------------------------------------
 
     if evaluation["quality"] == "strong":
-
         update_run_status(
             run_id,
             PASSED
@@ -223,7 +221,6 @@ def submit_answer(run_id, student_response):
     # ------------------------------------------
 
     if attempt_number < MAX_ATTEMPTS:
-
         update_run_status(
             run_id,
             AWAITING_RESPONSE
@@ -246,11 +243,6 @@ def submit_answer(run_id, student_response):
             "sufficient reasoning after "
             "3 attempts."
         )
-    )
-
-    update_run_status(
-        run_id,
-        FLAGGED
     )
 
     return {

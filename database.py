@@ -194,22 +194,82 @@ def init_db():
 def create_user(name):
     conn = get_connection()
     cursor = conn.cursor()
+
+    # Check whether the user already exists
+    cursor.execute(
+        "SELECT id FROM users WHERE name = ?",
+        (name,)
+    )
+
+    existing_user = cursor.fetchone()
+
+    if existing_user is not None:
+        user_id = existing_user["id"]
+        conn.close()
+        return user_id
+
+    # Create a new user if one does not exist
     created_at = datetime.now().isoformat()
-    cursor.execute('''INSERT INTO users (name, created_at) VALUES (?, ?)''', (name, created_at))  
+
+    cursor.execute(
+        """
+        INSERT INTO users (name, created_at)
+        VALUES (?, ?)
+        """,
+        (name, created_at)
+    )
+
     user_id = cursor.lastrowid
+
     conn.commit()
     conn.close()
+
     return user_id
 
-#add concept function
+
 def create_concept(name, difficulty, what_to_do):
     conn = get_connection()
     cursor = conn.cursor()
+
+    # Check whether the concept already exists
+    cursor.execute(
+        "SELECT id FROM concepts WHERE name = ?",
+        (name,)
+    )
+
+    existing_concept = cursor.fetchone()
+
+    if existing_concept is not None:
+        concept_id = existing_concept["id"]
+        conn.close()
+        return concept_id
+
+    # Create a new concept if one does not exist
     created_at = datetime.now().isoformat()
-    cursor.execute('''INSERT INTO concepts (name, difficulty, what_to_do, created_at) VALUES (?, ?, ?, ?)''', (name, difficulty, what_to_do, created_at))
+
+    cursor.execute(
+        """
+        INSERT INTO concepts (
+            name,
+            difficulty,
+            what_to_do,
+            created_at
+        )
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            name,
+            difficulty,
+            what_to_do,
+            created_at
+        )
+    )
+
     concept_id = cursor.lastrowid
+
     conn.commit()
     conn.close()
+
     return concept_id
 
 #add run function
