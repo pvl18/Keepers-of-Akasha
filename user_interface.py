@@ -1,3 +1,5 @@
+import html
+
 import streamlit as st
 
 from concepts import get_concepts
@@ -71,6 +73,33 @@ st.markdown(
         padding-top: 2rem;
     }
 
+    /* Slightly darker shades of the sidebar's existing soft green palette. */
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        color: #667460 !important;
+        -webkit-text-fill-color: #667460 !important;
+    }
+
+    [data-testid="stSidebar"] [role="radiogroup"] label p {
+        color: #5b6956 !important;
+        -webkit-text-fill-color: #5b6956 !important;
+    }
+
+    .partial-feedback {
+        background: #fff4b8;
+        color: #9a7410;
+        border-radius: 0.5rem;
+        padding: 1rem 1.1rem;
+        margin: 0.5rem 0 1rem;
+        font-family: 'DM Sans', sans-serif;
+        font-size: 1rem;
+    }
+
     h1,
     h2,
     h3,
@@ -125,6 +154,14 @@ st.markdown(
         margin-bottom: 0.7rem;
     }
 
+    .scenario-text {
+        color: var(--ink);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 1rem;
+        line-height: 1.65;
+        white-space: pre-wrap;
+    }
+
     .metric {
         background: var(--panel);
         border: 1px solid var(--line);
@@ -154,6 +191,52 @@ st.markdown(
         background: var(--green);
         color: white;
     }
+
+    /* Keep student typing clearly visible on the dark textarea. */
+    div[data-testid="stTextArea"] textarea {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        caret-color: #ffffff !important;
+    }
+
+    div[data-testid="stTextArea"] textarea::placeholder {
+        color: #bfc5cc !important;
+        -webkit-text-fill-color: #bfc5cc !important;
+        opacity: 1 !important;
+    }
+
+
+    /* Attempt history expander - normal state */
+    div[data-testid="stExpander"] details summary {
+        background-color: #e9ebe7 !important;
+        color: #25352b !important;
+        border-radius: 4px !important;
+    }
+
+    /* Attempt history expander text */
+    div[data-testid="stExpander"] details summary p {
+        color: #25352b !important;
+        -webkit-text-fill-color: #25352b !important;
+    }
+
+    /* Expander arrow */
+    div[data-testid="stExpander"] details summary svg {
+        fill: #25352b !important;
+        color: #25352b !important;
+    }
+
+    /* Hover state - only slightly darker */
+    div[data-testid="stExpander"] details summary:hover {
+        background-color: #dde1dc !important;
+        color: #25352b !important;
+    }
+
+    /* Keep text visible while hovering */
+    div[data-testid="stExpander"] details summary:hover p {
+        color: #25352b !important;
+        -webkit-text-fill-color: #25352b !important;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -382,13 +465,13 @@ def student_page():
             unsafe_allow_html=True
         )
 
+        scenario_text = html.escape(run_state["scenario"])
+
         st.markdown(
             f"""
             <div class="scenario">
-                <div class="scenario-title">
-                    Laboratory situation
-                </div>
-                {run_state["scenario"]}
+                <div class="scenario-title">Laboratory situation</div>
+                <div class="scenario-text">{scenario_text}</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -464,9 +547,12 @@ def student_page():
                 )
 
             elif quality == "partial":
-                st.warning(
-                    "Your reasoning is on the right track, "
-                    "but it needs a clearer scientific connection."
+                st.markdown(
+                    '<div class="partial-feedback">'
+                    'Your reasoning is on the right track, '
+                    'but it needs a clearer scientific connection.'
+                    '</div>',
+                    unsafe_allow_html=True
                 )
 
             else:
