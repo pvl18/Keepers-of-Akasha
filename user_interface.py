@@ -20,6 +20,7 @@ from database import (
 )
 
 
+
 # ==================================================
 # DATABASE INITIALIZATION
 # ==================================================
@@ -98,6 +99,29 @@ st.markdown(
         margin: 0.5rem 0 1rem;
         font-family: 'DM Sans', sans-serif;
         font-size: 1rem;
+    }
+
+    .evaluation-unavailable {
+        background: #fff4e5;
+        border: 1px solid #efc27b;
+        border-left: 5px solid #d97706;
+        border-radius: 0.5rem;
+        padding: 1.1rem 1.2rem;
+        margin: 0.5rem 0 1rem;
+        font-family: 'DM Sans', sans-serif;
+    }
+
+    .evaluation-unavailable-title {
+        color: #9a5b08;
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 0.3rem;
+    }
+
+    .evaluation-unavailable-text {
+        color: #6f5634;
+        font-size: 0.95rem;
+        line-height: 1.5;
     }
 
     h1,
@@ -268,6 +292,19 @@ def show_brand():
         "A practice space for explaining the science "
         "behind laboratory procedures."
     )
+
+
+# ==================================================
+# EVALUATION HELPERS
+# ==================================================
+
+def evaluation_unavailable(evaluation):
+    reasoning = str(evaluation.get("reasoning", "")).strip().lower()
+    return reasoning in {
+        "evaluation could not be completed.",
+        "evaluation couldn't be made",
+        "evaluation could not be made",
+    }
 
 
 # ==================================================
@@ -537,55 +574,71 @@ def student_page():
                 "evaluation"
             ]
 
-            quality = evaluation[
-                "quality"
-            ]
-
-            if quality == "strong":
-                st.success(
-                    "Strong reasoning."
-                )
-
-            elif quality == "partial":
+            if evaluation_unavailable(evaluation):
                 st.markdown(
-                    '<div class="partial-feedback">'
-                    'Your reasoning is on the right track, '
-                    'but it needs a clearer scientific connection.'
-                    '</div>',
+                    """
+                    <div class="evaluation-unavailable">
+                        <div class="evaluation-unavailable-title">
+                            Evaluation couldn't be made
+                        </div>
+                        <div class="evaluation-unavailable-text">
+                            Servers might be busy or check your network connection.
+                        </div>
+                    </div>
+                    """,
                     unsafe_allow_html=True
                 )
 
             else:
-                st.error(
-                    "Your response does not yet demonstrate "
-                    "the required reasoning."
+                quality = evaluation[
+                    "quality"
+                ]
+
+                if quality == "strong":
+                    st.success(
+                        "Strong reasoning."
+                    )
+
+                elif quality == "partial":
+                    st.markdown(
+                        '<div class="partial-feedback">'
+                        'Your reasoning is on the right track, '
+                        'but it needs a clearer scientific connection.'
+                        '</div>',
+                        unsafe_allow_html=True
+                    )
+
+                else:
+                    st.error(
+                        "Your response does not yet demonstrate "
+                        "the required reasoning."
+                    )
+
+                st.write(
+                    evaluation["reasoning"]
                 )
 
-            st.write(
-                evaluation["reasoning"]
-            )
+                # Show hints only while another retry is available.
+                # The evaluator still saves the final hint to the DB.
+                if (
+                    evaluation["hint"]
+                    and feedback["status"] != FLAGGED
+                ):
+                    st.info(
+                        f'Hint: {evaluation["hint"]}'
+                    )
 
-            # Show hints only while another retry is available.
-            # The evaluator still saves the final hint to the DB.
-            if (
-                evaluation["hint"]
-                and feedback["status"] != FLAGGED
-            ):
-                st.info(
-                    f'Hint: {evaluation["hint"]}'
-                )
+                if feedback["status"] == PASSED:
+                    st.success(
+                        "Reasoning check passed."
+                    )
 
-            if feedback["status"] == PASSED:
-                st.success(
-                    "Reasoning check passed."
-                )
-
-            elif feedback["status"] == FLAGGED:
-                st.error(
-                    "All three attempts have been used. "
-                    "This run has been sent for "
-                    "professor review."
-                )
+                elif feedback["status"] == FLAGGED:
+                    st.error(
+                        "All three attempts have been used. "
+                        "This run has been sent for "
+                        "professor review."
+                    )
 
         # ------------------------------------------
         # ATTEMPT HISTORY
@@ -651,112 +704,6 @@ def student_page():
 
 
 # ==================================================
-# PROFESSOR PAGE
-# ==================================================
-
-def professor_page():
-    st.markdown(
-        '<div class="eyebrow">Review workspace</div>',
-        unsafe_allow_html=True
-    )
-
-    st.title("Professor dashboard")
-
-    st.markdown(
-        '<p class="intro">'
-        'Review runs that need attention and inspect '
-        'the reasoning behind each result.'
-        '</p>',
-        unsafe_allow_html=True
-    )
-
-    first, second, third = st.columns(3)
-
-    with first:
-        st.markdown(
-            """
-            <div class="metric">
-                <div class="metric-label">
-                    ACTIVE RUNS
-                </div>
-                <div class="metric-value">
-                    12
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    with second:
-        st.markdown(
-            """
-            <div class="metric">
-                <div class="metric-label">
-                    PASSED TODAY
-                </div>
-                <div class="metric-value">
-                    8
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    with third:
-        st.markdown(
-            """
-            <div class="metric">
-                <div class="metric-label">
-                    NEEDS REVIEW
-                </div>
-                <div class="metric-value">
-                    3
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    st.divider()
-
-    st.subheader(
-        "Runs needing review"
-    )
-
-    st.dataframe(
-        {
-            "Student": [
-                "student_014",
-                "student_009",
-                "student_021"
-            ],
-            "Concept": [
-                "Gram Staining",
-                "Fermentation",
-                "Protein Purification"
-            ],
-            "Attempts": [
-                3,
-                3,
-                2
-            ],
-            "Status": [
-                "Flagged",
-                "Flagged",
-                "Retry"
-            ],
-        },
-        hide_index=True,
-        use_container_width=True,
-    )
-
-    st.caption(
-        "Backend connection point: replace demo rows "
-        "with persisted flag and attempt records."
-    )
-
-
-# ==================================================
 # SESSION STATE
 # ==================================================
 
@@ -782,22 +729,18 @@ if "student_name" not in st.session_state:
 
 show_brand()
 
-page = st.sidebar.radio(
-    "Workspace",
-    [
-        "Student",
-        "Professor dashboard"
-    ],
-    label_visibility="collapsed"
+st.sidebar.markdown("### Workspace")
+st.sidebar.markdown("**Student**")
+
+# The professor dashboard is intentionally a separate Streamlit app.
+# Run dashboard.py on port 8502, then this opens it in a new browser tab.
+st.sidebar.link_button(
+    "Professor dashboard ↗",
+    "http://localhost:8502",
+    use_container_width=True,
 )
 
 st.sidebar.divider()
+st.sidebar.caption("Reasoning Check")
 
-st.sidebar.caption(
-    "Reasoning Check"
-)
-
-if page == "Student":
-    student_page()
-else:
-    professor_page()
+student_page()
