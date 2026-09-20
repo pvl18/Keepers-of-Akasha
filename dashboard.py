@@ -3,7 +3,10 @@ import pandas as pd
 from database import (
     get_flagged_students,
     get_complete_run_details,
-    save_professor_review
+    save_professor_review,
+    get_students,
+    get_student_concept_progress,
+    get_student_runs
 )
 
 # =========================================================
@@ -434,71 +437,284 @@ elif page == "Students":
         "Explore individual student learning profiles."
     )
 
-    student_names = [
-        "Student 014",
-        "Student 021",
-        "Student 009"
-    ]
+    student_records = get_students()
 
-    selected_student = st.selectbox(
-        "Select Student",
-        student_names
-    )
+    if not student_records:
+        st.info(
+            "No student learning activity has been recorded yet."
+        )
 
-    st.divider()
+    else:
+        student_options = {
+            student["student_name"]: student
+            for student in student_records
+        }
 
-    st.subheader(selected_student)
+        selected_student = st.selectbox(
+            "Select Student",
+            list(student_options.keys())
+        )
 
-    a, b, c, d = st.columns(4)
+        student = student_options[selected_student]
 
-    with a:
-        st.metric("Concepts Assessed", 6)
+        st.divider()
 
-    with b:
-        st.metric("Attempts", 11)
+        st.subheader(selected_student)
 
-    with c:
-        st.metric("Needs Attention", 2)
+        a, b, c, d = st.columns(4)
 
-    with d:
-        st.metric("Strong Concepts", 4)
+        with a:
+            st.metric(
+                "Concepts Assessed",
+                student["concepts_assessed"]
+            )
 
-    st.divider()
+        with b:
+            st.metric(
+                "Attempts",
+                student["total_attempts"]
+            )
 
-    st.subheader("📚 Concept Progress")
+        with c:
+            st.metric(
+                "Needs Attention",
+                student["needs_attention"]
+            )
 
-    student_progress = pd.DataFrame({
-        "Concept": [
-            "Gram Staining",
-            "Fermentation",
-            "Protein Purification",
-            "TLC"
-        ],
-        "Status": [
-            "Needs Attention",
-            "Developing",
-            "Strong",
-            "Strong"
-        ]
-    })
+        with d:
+            st.metric(
+                "Total Runs",
+                student["total_runs"]
+            )
+        st.divider()
 
-    st.dataframe(
-        student_progress,
-        use_container_width=True,
-        hide_index=True
-    )
+        st.subheader("📚 Concept Progress")
 
-    st.subheader("🧠 Learning Analysis")
+        concept_progress = get_student_concept_progress(
+            student["user_id"]
+        )
 
-    st.warning(
-        "Student initially demonstrated difficulty connecting "
-        "experimental procedure with observed results."
-    )
+        if not concept_progress:
+            st.info(
+                "No concept activity found for this student."
+            )
 
-    st.success(
-        "Reasoning improved after targeted feedback."
-    )
+        else:
+            progress_rows = []
 
+            for concept in concept_progress:
+                if concept["flagged_runs"] > 0:
+                    status = "Needs Attention"
+
+                elif concept["passed_runs"] > 0:
+                    status = "Passed"
+
+                elif concept["reviewed_runs"] > 0:
+                    status = "Reviewed"
+
+                else:
+                    status = "In Progress"
+
+                progress_rows.append(
+                    {
+                        "Concept": concept["concept_name"],
+                        "Runs": concept["total_runs"],
+                        "Attempts": concept["total_attempts"],
+                        "Passed": concept["passed_runs"],
+                        "Flagged": concept["flagged_runs"],
+                        "Reviewed": concept["reviewed_runs"],
+                        "Status": status
+                    }
+                )
+
+            progress_df = pd.DataFrame(progress_rows)
+
+            st.dataframe(
+                progress_df,
+                use_container_width=True,
+                hide_index=True
+            )
+            st.divider()
+
+            st.subheader("🧪 Run History")
+
+            concept_names = [
+                concept["concept_name"]
+                for concept in concept_progress
+            ]
+
+            selected_concept = st.selectbox(
+                "Select Concept",
+                concept_names,
+                key="student_concept_history"
+            )
+
+            student_runs = get_student_runs(
+                student["user_id"],
+                selected_concept
+            )
+
+            if not student_runs:
+                st.info(
+                    "No runs found for this concept."
+                )
+
+            else:
+                run_rows = []
+
+                for run in student_runs:
+                    run_rows.append(
+                        {
+                            "Run": run["run_id"],
+                            "Status": run["status"]
+                            .replace("_", " ")
+                            .title(),
+                            "Attempts": run["attempts"],
+                            "Created": run["created_at"][:19]
+                            .replace("T", " ")
+                        }
+                    )
+
+                run_df = pd.DataFrame(run_rows)
+
+                st.dataframe(
+                    run_df,
+                    use_container_width=True,
+                    hide_index=True
+                )
+                st.divider()
+
+                st.subheader("🔎 Inspect Run")
+
+                run_options = {
+                    (
+                        f'Run {run["run_id"]} — '
+                        f'{run["status"].replace("_", " ").title()}'
+                    ): run["run_id"]
+                    for run in student_runs
+                }
+
+                selected_run_label = st.selectbox(
+                    "Select Run",
+                    list(run_options.keys()),
+                    key="student_run_inspection"
+                )
+
+                selected_run_id = run_options[
+                    selected_run_label
+                ]
+
+                run_details = get_complete_run_details(
+                    selected_run_id
+                )
+
+                if run_details is None:
+                    st.error(
+                        "The selected run could not be found."
+                    )
+
+                else:
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.metric(
+                            "Status",
+                            run_details["status"]
+                            .replace("_", " ")
+                            .title()
+                        )
+
+                    with col2:
+                        st.metric(
+                            "Attempts",
+                            run_details["current_attempt"]
+                        )
+
+                    st.markdown("**Laboratory Scenario**")
+
+                    st.info(
+                        run_details["scenario"]
+                    )
+
+                    st.markdown("**Expected Reasoning**")
+
+                    st.write(
+                        run_details["expecting_reasoning"]
+                    )
+
+                    st.markdown("**Student Attempts**")
+
+                    attempts = run_details.get(
+                        "attempts",
+                        []
+                    )
+
+                    if not attempts:
+                        st.warning(
+                            "No attempts were recorded for this run."
+                        )
+
+                    else:
+                        for attempt in attempts:
+                            attempt_number = attempt[
+                                "attempt_number"
+                            ]
+
+                            with st.expander(
+                                f"Attempt {attempt_number}"
+                            ):
+                                st.markdown(
+                                    "**Student response**"
+                                )
+
+                                st.write(
+                                    attempt["student_response"]
+                                )
+
+                                evaluation = attempt.get(
+                                    "evaluation"
+                                )
+
+                                if evaluation:
+                                    quality = evaluation[
+                                        "quality"
+                                    ]
+
+                                    st.markdown(
+                                        "**AI classification**"
+                                    )
+
+                                    if quality == "strong":
+                                        st.success(
+                                            quality.title()
+                                        )
+
+                                    elif quality == "partial":
+                                        st.warning(
+                                            quality.title()
+                                        )
+
+                                    else:
+                                        st.error(
+                                            quality.title()
+                                        )
+
+                                    st.markdown(
+                                        "**AI reasoning**"
+                                    )
+
+                                    st.write(
+                                        evaluation["reasoning"]
+                                    )
+
+                                    if evaluation["hint"]:
+                                        st.markdown(
+                                            "**Hint**"
+                                        )
+
+                                        st.info(
+                                            evaluation["hint"]
+                                        )
 
 # =========================================================
 # CONCEPTS PAGE

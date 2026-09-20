@@ -52,7 +52,18 @@ class LearningAgentDatabase(ABC):
     @abstractmethod
     def get_complete_run_details(self, run_id):
         """Return the full run context including attempts and feedback."""
+        
+    @abstractmethod
+    def get_students(self):
+        """Return summary information for students with learning runs.""" 
 
+    @abstractmethod
+    def get_student_concept_progress(self, user_id):
+        """Return concept progress for a selected student."""
+    
+    @abstractmethod
+    def get_student_runs(self, user_id, concept_name):
+        """Return run history for a student's selected concept."""
 
 class SQLiteLearningAgentDatabase(LearningAgentDatabase):
     def __init__(self, db_path=DB_PATH):
@@ -92,8 +103,15 @@ class SQLiteLearningAgentDatabase(LearningAgentDatabase):
 
     def get_complete_run_details(self, run_id):
         return get_complete_run_details(run_id)
+    
+    def get_students(self):
+        return get_students()
+    
+    def get_student_concept_progress(self, user_id):
+        return get_student_concept_progress(user_id)
 
-
+    def get_student_runs(self, user_id, concept_name):
+        return get_student_runs(user_id, concept_name)
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -328,6 +346,117 @@ def save_flag(run_id, reason):
     conn.commit()
     conn.close()
     return flag_id
+
+#students summary function
+def get_students():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        SELECT
+            u.id AS user_id,
+            u.name AS student_name,
+            COUNT(DISTINCT r.id) AS total_runs,
+            COUNT(DISTINCT r.concept_id) AS concepts_assessed,
+            COALESCE(SUM(r.current_attempt), 0) AS total_attempts,
+            SUM(
+                CASE
+                    WHEN r.status = 'flagged'
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS needs_attention
+        FROM users u
+        JOIN runs r ON u.id = r.user_id
+        GROUP BY u.id, u.name
+        ORDER BY u.name
+        '''
+    )
+
+    students = cursor.fetchall()
+    conn.close()
+
+    return [dict(student) for student in students]
+
+#student concept progress function
+def get_student_concept_progress(user_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        SELECT
+            c.name AS concept_name,
+            COUNT(r.id) AS total_runs,
+            COALESCE(SUM(r.current_attempt), 0) AS total_attempts,
+            SUM(
+                CASE
+                    WHEN r.status = 'passed'
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS passed_runs,
+            SUM(
+                CASE
+                    WHEN r.status = 'flagged'
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS flagged_runs,
+            SUM(
+                CASE
+                    WHEN r.status = 'reviewed'
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS reviewed_runs,
+            MAX(r.updated_at) AS last_activity
+        FROM runs r
+        JOIN concepts c ON r.concept_id = c.id
+        WHERE r.user_id = ?
+        GROUP BY c.id, c.name
+        ORDER BY last_activity DESC
+        ''',
+        (user_id,)
+    )
+
+    progress = cursor.fetchall()
+    conn.close()
+
+    return [dict(row) for row in progress]
+
+#student run history function
+def get_student_runs(user_id, concept_name):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        SELECT
+            r.id AS run_id,
+            c.name AS concept_name,
+            r.status,
+            r.current_attempt AS attempts,
+            r.created_at,
+            r.updated_at,
+            r.completed_at
+        FROM runs r
+        JOIN concepts c ON r.concept_id = c.id
+        WHERE r.user_id = ?
+          AND c.name = ?
+        ORDER BY r.created_at DESC
+        ''',
+        (
+            user_id,
+            concept_name
+        )
+    )
+
+    runs = cursor.fetchall()
+    conn.close()
+
+    return [dict(run) for run in runs]
 
 #flagged students
 def get_flagged_students():
