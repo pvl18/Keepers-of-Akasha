@@ -1,5 +1,10 @@
 import streamlit as st
 import pandas as pd
+from database import (
+    get_flagged_students,
+    get_complete_run_details,
+    save_professor_review
+)
 
 # =========================================================
 # PAGE CONFIG
@@ -124,29 +129,21 @@ with st.sidebar:
 # Replace with database/API data later
 # =========================================================
 
-students = [
-    {
-        "student": "Student 014",
-        "concept": "Gram Staining",
-        "issue": "Reasoning Gap",
-        "attempts": 3,
-        "status": "Needs Attention"
-    },
-    {
-        "student": "Student 021",
-        "concept": "Fermentation",
-        "issue": "Low Understanding",
-        "attempts": 3,
-        "status": "Needs Attention"
-    },
-    {
-        "student": "Student 009",
-        "concept": "Protein Purification",
-        "issue": "Concept Gap",
-        "attempts": 2,
-        "status": "Needs Attention"
-    }
-]
+flagged_students = get_flagged_students()
+
+students = []
+
+for flag in flagged_students:
+    students.append(
+        {
+            "student": flag["student_name"],
+            "concept": flag["concept_name"],
+            "issue": flag["reason"],
+            "status": "Needs Attention",
+            "run_id": flag["run_id"],
+            "flag_id": flag["flag_id"]
+        }
+    )
 
 
 concept_data = pd.DataFrame({
@@ -583,15 +580,215 @@ elif page == "Needs Attention":
     st.title("🚩 Students Needing Attention")
 
     st.caption(
-        "Students identified through learning assessments."
+        "Review students flagged after three unsuccessful "
+        "reasoning attempts."
     )
 
-    st.dataframe(
-        pd.DataFrame(students),
-        use_container_width=True,
-        hide_index=True
-    )
+    if not flagged_students:
+        st.success(
+            "No students currently need professor review."
+        )
 
+    else:
+        case_options = {}
+
+        for flag in flagged_students:
+            label = (
+                f'{flag["student_name"]} — '
+                f'{flag["concept_name"]} '
+                f'(Run {flag["run_id"]})'
+            )
+
+            case_options[label] = flag
+
+        selected_case = st.selectbox(
+            "Select flagged case",
+            list(case_options.keys())
+        )
+
+        selected_flag = case_options[selected_case]
+
+        run_details = get_complete_run_details(
+            selected_flag["run_id"]
+        )
+
+        if run_details is None:
+            st.error(
+                "The selected run could not be found."
+            )
+
+        else:
+            st.divider()
+
+            st.subheader(
+                f'{run_details["user_name"]} — '
+                f'{run_details["concept_name"]}'
+            )
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric(
+                    "Attempts",
+                    run_details["current_attempt"]
+                )
+
+            with col2:
+                st.metric(
+                    "Run Status",
+                    run_details["status"].replace(
+                        "_",
+                        " "
+                    ).title()
+                )
+
+            with col3:
+                st.metric(
+                    "Flag Status",
+                    selected_flag["status"].title()
+                )
+
+            st.subheader("Laboratory Scenario")
+
+            st.info(
+                run_details["scenario"]
+            )
+
+            st.subheader("Expected Reasoning")
+
+            st.write(
+                run_details["expecting_reasoning"]
+            )
+
+            st.subheader("Student Attempts")
+
+            attempts = run_details.get(
+                "attempts",
+                []
+            )
+
+            if not attempts:
+                st.warning(
+                    "No attempts were found for this run."
+                )
+
+            else:
+                for attempt in attempts:
+                    attempt_number = attempt[
+                        "attempt_number"
+                    ]
+
+                    with st.expander(
+                        f"Attempt {attempt_number}",
+                        expanded=True
+                    ):
+                        st.markdown(
+                            "**Student response**"
+                        )
+
+                        st.write(
+                            attempt["student_response"]
+                        )
+
+                        evaluation = attempt.get(
+                            "evaluation"
+                        )
+
+                        if evaluation:
+                            st.markdown(
+                                "**AI classification**"
+                            )
+
+                            quality = evaluation[
+                                "quality"
+                            ]
+
+                            if quality == "strong":
+                                st.success(
+                                    quality.title()
+                                )
+
+                            elif quality == "partial":
+                                st.warning(
+                                    quality.title()
+                                )
+
+                            else:
+                                st.error(
+                                    quality.title()
+                                )
+
+                            st.markdown(
+                                "**AI reasoning**"
+                            )
+
+                            st.write(
+                                evaluation["reasoning"]
+                            )
+
+                            if evaluation["hint"]:
+                                st.markdown(
+                                    "**Hint given to student**"
+                                )
+
+                                st.info(
+                                    evaluation["hint"]
+                                )
+
+                        else:
+                            st.warning(
+                                "No evaluation was stored "
+                                "for this attempt."
+                            )
+
+            st.divider()
+
+            st.subheader("Flag Details")
+
+            st.write(
+                selected_flag["reason"]
+            )
+            st.divider()
+
+            st.subheader("Professor Review")
+
+            decision = st.radio(
+                "Decision",
+                [
+                    "Approve",
+                    "Reject"
+                ],
+                horizontal=True,
+                key=f'review_decision_{selected_flag["flag_id"]}'
+            )
+
+            comments = st.text_area(
+                "Professor comments",
+                placeholder=(
+                    "Add comments about the student's "
+                    "reasoning or recommended follow-up."
+                ),
+                key=f'review_comments_{selected_flag["flag_id"]}'
+            )
+
+            if st.button(
+                "Submit Review",
+                type="primary",
+                key=f'review_submit_{selected_flag["flag_id"]}'
+            ):
+                decision_value = decision.lower()
+
+                review_id = save_professor_review(
+                    flag_id=selected_flag["flag_id"],
+                    decision=decision_value,
+                    comments=comments.strip()
+                )
+
+                st.success(
+                    f"Review {review_id} saved successfully."
+                )
+
+                st.rerun()
 
 # =========================================================
 # CLASS INSIGHTS PAGE

@@ -360,14 +360,81 @@ def get_flagged_students():
 def save_professor_review(flag_id, decision, comments):
     conn = get_connection()
     cursor = conn.cursor()
+
     created_at = datetime.now().isoformat()
-    cursor.execute('''INSERT INTO professor_reviews (flag_id, decision, comments, created_at) VALUES (?, ?, ?, ?)''', (flag_id, decision, comments, created_at))
+
+    # Save the professor's review
+    cursor.execute(
+        '''
+        INSERT INTO professor_reviews (
+            flag_id,
+            decision,
+            comments,
+            created_at
+        )
+        VALUES (?, ?, ?, ?)
+        ''',
+        (
+            flag_id,
+            decision,
+            comments,
+            created_at
+        )
+    )
+
     review_id = cursor.lastrowid
-    # update the status of the flag based on the professor's decision
-    new_status = 'resolved' if decision == 'approve' else 'rejected'
-    cursor.execute('''UPDATE flags SET status = ? WHERE id = ?''', (new_status, flag_id))
+
+    # Update the flag status
+    new_status = (
+        "resolved"
+        if decision == "approve"
+        else "rejected"
+    )
+
+    cursor.execute(
+        '''
+        UPDATE flags
+        SET status = ?
+        WHERE id = ?
+        ''',
+        (
+            new_status,
+            flag_id
+        )
+    )
+
+    # Find the run associated with this flag
+    cursor.execute(
+        '''
+        SELECT run_id
+        FROM flags
+        WHERE id = ?
+        ''',
+        (flag_id,)
+    )
+
+    flag = cursor.fetchone()
+
+    # Mark the associated run as reviewed
+    if flag is not None:
+        cursor.execute(
+            '''
+            UPDATE runs
+            SET status = 'reviewed',
+                updated_at = ?,
+                completed_at = ?
+            WHERE id = ?
+            ''',
+            (
+                created_at,
+                created_at,
+                flag["run_id"]
+            )
+        )
+
     conn.commit()
     conn.close()
+
     return review_id
 
 #get run details function
