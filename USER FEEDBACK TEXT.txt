@@ -1,0 +1,19 @@
+USER’S FEEDBACK
+1. Kowsikan — Fermentation
+Kowsikan tried the agent with the fermentation domain. He was impressed by the way the agent generated scenarios and felt that they made the fermentation process easier to visualise compared to just reading the theory.While using it, he noticed that the text and background colours were too similar, which made some parts slightly difficult to read. Based on his feedback, we changed the colours to create better contrast.
+After the change, he felt that the interface was clearer and that the scenario-based approach helped him visualise fermentation and understand the related knowledge more easily.
+Change made: Improved text and background colour contrast.
+
+2. Subram — Enzyme Activity Assays
+Subram tried the agent with the enzyme activity assays domain.He felt this made the assay process easier to follow.
+One thing he noticed was that some explanations were slightly lengthy, making it harder to follow the important steps of the process. Based on this, we shortened some of the explanations and made the key steps more noticeable.
+After the changes, he felt that the scenario had a clearer flow and that it was easier to understand the enzyme activity assay process.
+Change made: Reduced unnecessary text and highlighted the important steps more clearly.
+
+3. Siva — Microscopy
+
+Siva tried the agent with the microscopy domain. He found the scenario-based approach practical because it helped him visualise what actually happens while using a microscope.
+He felt that the initial scenario was a little too straightforward and suggested including common situations that students might actually face. In particular, he pointed out the difficulty of getting a clear image when the focus is not adjusted properly.
+Based on this feedback, we modified the scenario to include a realistic focus-adjustment problem and showed how the user could identify and correct it.
+After the change, Siva felt that the scenario was more practical and relatable, as it showed not only the correct procedure but also what could go wrong and how to handle it.
+Change made: Added a realistic focus-adjustment problem and clearer corrective guidance.
