@@ -65,6 +65,14 @@ class LearningAgentDatabase(ABC):
     def get_student_runs(self, user_id, concept_name):
         """Return run history for a student's selected concept."""
 
+    @abstractmethod
+    def get_dashboard_summary(self):
+        """Return aggregate metrics for the professor dashboard."""
+
+    @abstractmethod
+    def get_concept_performance(self):
+        """Return class performance statistics grouped by concept."""
+
 class SQLiteLearningAgentDatabase(LearningAgentDatabase):
     def __init__(self, db_path=DB_PATH):
         self.db_path = Path(db_path)
@@ -112,6 +120,12 @@ class SQLiteLearningAgentDatabase(LearningAgentDatabase):
 
     def get_student_runs(self, user_id, concept_name):
         return get_student_runs(user_id, concept_name)
+
+    def get_dashboard_summary(self):
+        return get_dashboard_summary()
+
+    def get_concept_performance(self):
+        return get_concept_performance()
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -347,40 +361,8 @@ def save_flag(run_id, reason):
     conn.close()
     return flag_id
 
-#students summary function
-def get_students():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        '''
-        SELECT
-            u.id AS user_id,
-            u.name AS student_name,
-            COUNT(DISTINCT r.id) AS total_runs,
-            COUNT(DISTINCT r.concept_id) AS concepts_assessed,
-            COALESCE(SUM(r.current_attempt), 0) AS total_attempts,
-            SUM(
-                CASE
-                    WHEN r.status = 'flagged'
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS needs_attention
-        FROM users u
-        JOIN runs r ON u.id = r.user_id
-        GROUP BY u.id, u.name
-        ORDER BY u.name
-        '''
-    )
-
-    students = cursor.fetchall()
-    conn.close()
-
-    return [dict(student) for student in students]
-
-#student concept progress function
-def get_student_concept_progress(user_id):
+#concept performance function
+def get_concept_performance():
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -389,7 +371,6 @@ def get_student_concept_progress(user_id):
         SELECT
             c.name AS concept_name,
             COUNT(r.id) AS total_runs,
-            COALESCE(SUM(r.current_attempt), 0) AS total_attempts,
             SUM(
                 CASE
                     WHEN r.status = 'passed'
@@ -410,10 +391,168 @@ def get_student_concept_progress(user_id):
                     THEN 1
                     ELSE 0
                 END
+            ) AS reviewed_runs
+        FROM concepts c
+        JOIN runs r ON c.id = r.concept_id
+        GROUP BY c.id, c.name
+        ORDER BY c.name
+        '''
+    )
+
+    concepts = cursor.fetchall()
+    conn.close()
+
+    results = []
+
+    for concept in concepts:
+        concept = dict(concept)
+
+        completed_runs = (
+            concept["passed_runs"]
+            + concept["flagged_runs"]
+            + concept["reviewed_runs"]
+        )
+
+        if completed_runs > 0:
+            performance = round(
+                (
+                    concept["passed_runs"]
+                    + concept["reviewed_runs"]
+                )
+                / completed_runs
+                * 100
+            )
+        else:
+            performance = 0
+
+        concept["performance"] = performance
+        results.append(concept)
+
+    return results
+    
+#dashboard summary function
+def get_dashboard_summary():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        SELECT COUNT(DISTINCT user_id)
+        FROM runs
+        '''
+    )
+    total_students = cursor.fetchone()[0]
+
+    cursor.execute(
+        '''
+        SELECT COUNT(DISTINCT concept_id)
+        FROM runs
+        '''
+    )
+    concepts_assessed = cursor.fetchone()[0]
+
+    cursor.execute(
+        '''
+        SELECT COUNT(*)
+        FROM runs
+        WHERE status IN (
+            'generating',
+            'awaiting_response',
+            'evaluating'
+        )
+        '''
+    )
+    active_learning = cursor.fetchone()[0]
+
+    cursor.execute(
+        '''
+        SELECT COUNT(*)
+        FROM flags
+        WHERE status = 'pending'
+        '''
+    )
+    needs_attention = cursor.fetchone()[0]
+
+    conn.close()
+
+    return {
+        "total_students": total_students,
+        "concepts_assessed": concepts_assessed,
+        "active_learning": active_learning,
+        "needs_attention": needs_attention
+    }
+
+#students summary function
+def get_students():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        SELECT
+            u.id AS user_id,
+            u.name AS student_name,
+            COUNT(DISTINCT r.id) AS total_runs,
+            COUNT(DISTINCT r.concept_id) AS concepts_assessed,
+            COALESCE(SUM(r.current_attempt), 0) AS total_attempts,
+            COUNT(
+                DISTINCT CASE
+                    WHEN f.status = 'pending'
+                    THEN f.id
+                END
+            ) AS needs_attention
+        FROM users u
+        JOIN runs r ON u.id = r.user_id
+        LEFT JOIN flags f ON r.id = f.run_id
+        GROUP BY u.id, u.name
+        ORDER BY u.name
+        '''
+    )
+
+    students = cursor.fetchall()
+    conn.close()
+
+    return [dict(student) for student in students]
+
+#student concept progress function
+def get_student_concept_progress(user_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        SELECT
+            c.name AS concept_name,
+            COUNT(DISTINCT r.id) AS total_runs,
+            COALESCE(SUM(r.current_attempt), 0) AS total_attempts,
+            COUNT(
+                DISTINCT CASE
+                    WHEN r.status = 'passed'
+                    THEN r.id
+                END
+            ) AS passed_runs,
+            COUNT(
+                DISTINCT CASE
+                    WHEN f.id IS NOT NULL
+                    THEN r.id
+                END
+            ) AS flagged_runs,
+            COUNT(
+                DISTINCT CASE
+                    WHEN f.status IN ('resolved', 'rejected')
+                    THEN f.id
+                END
             ) AS reviewed_runs,
+            COUNT(
+                DISTINCT CASE
+                    WHEN f.status = 'pending'
+                    THEN f.id
+                END
+            ) AS pending_flags,
             MAX(r.updated_at) AS last_activity
         FROM runs r
         JOIN concepts c ON r.concept_id = c.id
+        LEFT JOIN flags f ON r.id = f.run_id
         WHERE r.user_id = ?
         GROUP BY c.id, c.name
         ORDER BY last_activity DESC

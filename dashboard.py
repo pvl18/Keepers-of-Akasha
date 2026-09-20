@@ -6,7 +6,9 @@ from database import (
     save_professor_review,
     get_students,
     get_student_concept_progress,
-    get_student_runs
+    get_student_runs,
+    get_dashboard_summary,
+    get_concept_performance
 )
 
 # =========================================================
@@ -46,10 +48,19 @@ st.markdown("""
 
 .card {
     background-color: white;
+    color: #111827;
     border: 1px solid #e5e7eb;
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 15px;
+}
+
+.card p {
+    color: #374151;
+}
+
+.card-title {
+    color: #111827;
 }
 
 .card-title {
@@ -128,12 +139,11 @@ with st.sidebar:
 
 
 # =========================================================
-# SAMPLE DATA
-# Replace with database/API data later
+# DASHBOARD DATA
 # =========================================================
 
 flagged_students = get_flagged_students()
-
+dashboard_summary = get_dashboard_summary()
 students = []
 
 for flag in flagged_students:
@@ -149,16 +159,30 @@ for flag in flagged_students:
     )
 
 
-concept_data = pd.DataFrame({
-    "Concept": [
-        "Gram Staining",
-        "Fermentation",
-        "Protein Purification",
-        "Enzyme Activity",
-        "TLC"
-    ],
-    "Mastery": [72, 51, 81, 64, 70]
-})
+concept_performance = get_concept_performance()
+
+concept_data = pd.DataFrame(
+    [
+        {
+            "Concept": concept["concept_name"],
+            "Performance": concept["performance"]
+        }
+        for concept in concept_performance
+    ]
+)
+
+if concept_performance:
+    lowest_concept = min(
+        concept_performance,
+        key=lambda concept: concept["performance"]
+    )
+    strongest_concept = max(
+        concept_performance,
+        key=lambda concept: concept["performance"]
+    )
+else:
+    lowest_concept = None
+    strongest_concept = None
 
 
 # =========================================================
@@ -186,36 +210,56 @@ if page == "Dashboard":
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.markdown("""
-        <div class="card">
-            <div class="metric-label">👨‍🎓 Students</div>
-            <div class="metric-number">42</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="card">
+                <div class="metric-label">👨‍🎓 Students</div>
+                <div class="metric-number">
+                    {dashboard_summary["total_students"]}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     with col2:
-        st.markdown("""
-        <div class="card">
-            <div class="metric-label">📚 Concepts Assessed</div>
-            <div class="metric-number">18</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="card">
+                <div class="metric-label">📚 Concepts Assessed</div>
+                <div class="metric-number">
+                    {dashboard_summary["concepts_assessed"]}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     with col3:
-        st.markdown("""
-        <div class="card">
-            <div class="metric-label">🔄 Active Learning</div>
-            <div class="metric-number">27</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="card">
+                <div class="metric-label">🔄 Active Learning</div>
+                <div class="metric-number">
+                    {dashboard_summary["active_learning"]}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     with col4:
-        st.markdown("""
-        <div class="card">
-            <div class="metric-label">🚩 Needs Attention</div>
-            <div class="metric-number">6</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="card">
+                <div class="metric-label">🚩 Needs Attention</div>
+                <div class="metric-number">
+                    {dashboard_summary["needs_attention"]}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     # -----------------------------------------------------
     # TWO COLUMN AREA
@@ -236,13 +280,18 @@ if page == "Dashboard":
             unsafe_allow_html=True
         )
 
-        df_students = pd.DataFrame(students)
+        if students:
+            df_students = pd.DataFrame(students)
 
-        st.dataframe(
-            df_students,
-            use_container_width=True,
-            hide_index=True
-        )
+            st.dataframe(
+                df_students,
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.success(
+                "No students currently need professor review."
+            )
 
         if st.button(
             "View Student Analysis →",
@@ -263,23 +312,29 @@ if page == "Dashboard":
             unsafe_allow_html=True
         )
 
-        st.info(
-            "🔴 **Common difficulty**\n\n"
-            "Students are struggling to connect "
-            "decolorization time with Gram staining results."
-        )
+        if not concept_performance:
+            st.info(
+                "No concept performance data is available yet."
+            )
+        else:
+            st.warning(
+                "🟡 **Lowest current outcome rate**\n\n"
+                f'{lowest_concept["concept_name"]}: '
+                f'{lowest_concept["performance"]}% '
+                f'across {lowest_concept["total_runs"]} run(s).'
+            )
 
-        st.warning(
-            "🟡 **Emerging difficulty**\n\n"
-            "Several students need support connecting "
-            "fermentation conditions with product formation."
-        )
+            st.success(
+                "🟢 **Highest current outcome rate**\n\n"
+                f'{strongest_concept["concept_name"]}: '
+                f'{strongest_concept["performance"]}% '
+                f'across {strongest_concept["total_runs"]} run(s).'
+            )
 
-        st.success(
-            "🟢 **Strong area**\n\n"
-            "Protein purification fundamentals show "
-            "relatively strong understanding."
-        )
+            st.caption(
+                "Outcome rate is based on completed run statuses "
+                "and is not a student grade."
+            )
 
     # -----------------------------------------------------
     # CONCEPT PERFORMANCE
@@ -297,35 +352,43 @@ if page == "Dashboard":
     with chart_col:
 
         st.bar_chart(
-            concept_data.set_index("Concept")["Mastery"]
+            concept_data.set_index("Concept")["Performance"]
         )
 
     with insight_col:
 
-        st.markdown("""
-        <div class="card">
+        if lowest_concept and strongest_concept:
+            st.markdown(
+                f"""
+                <div class="card">
 
-        <div class="card-title">
-        Concept Overview
-        </div>
+                <div class="card-title">
+                Concept Overview
+                </div>
 
-        <p>
-        Concepts with lower class performance can be
-        investigated through the corresponding AI modules.
-        </p>
+                <p>
+                Performance is calculated from completed
+                learning-run outcomes.
+                </p>
 
-        <p>
-        <b>Lowest current area:</b><br>
-        Fermentation
-        </p>
+                <p>
+                <b>Lowest current outcome rate:</b><br>
+                {lowest_concept["concept_name"]}
+                ({lowest_concept["performance"]}%)
+                </p>
 
-        <p>
-        <b>Strongest current area:</b><br>
-        Protein Purification
-        </p>
+                <p>
+                <b>Highest current outcome rate:</b><br>
+                {strongest_concept["concept_name"]}
+                ({strongest_concept["performance"]}%)
+                </p>
 
-        </div>
-        """, unsafe_allow_html=True)
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.info("No concept performance data is available yet.")
 
     # -----------------------------------------------------
     # AI MODULES
@@ -342,24 +405,29 @@ if page == "Dashboard":
 
     with m1:
 
-        st.markdown("""
-        <div class="card">
+        st.markdown(
+            f"""
+            <div class="card">
 
-        <div class="card-title">
-        🧠 Reasoning Check
-        </div>
+            <div class="card-title">
+            🧠 Reasoning Check
+            </div>
 
-        <p>
-        Scenario-based reasoning assessment.
-        </p>
+            <p>
+            Scenario-based reasoning assessment.
+            </p>
 
-        <p>
-        <b>31</b> students assessed<br>
-        <b>5</b> need attention
-        </p>
+            <p>
+            <b>{dashboard_summary["total_students"]}</b>
+            students assessed<br>
+            <b>{dashboard_summary["needs_attention"]}</b>
+            need attention
+            </p>
 
-        </div>
-        """, unsafe_allow_html=True)
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
         if st.button(
             "Open Module",
@@ -383,7 +451,7 @@ if page == "Dashboard":
         </p>
 
         <p>
-        <b>24</b> scenarios completed
+        Planned module
         </p>
 
         </div>
@@ -411,7 +479,7 @@ if page == "Dashboard":
         </p>
 
         <p>
-        <b>18</b> simulations completed
+        Planned module
         </p>
 
         </div>
@@ -503,14 +571,17 @@ elif page == "Students":
             progress_rows = []
 
             for concept in concept_progress:
-                if concept["flagged_runs"] > 0:
+                if concept["pending_flags"] > 0:
                     status = "Needs Attention"
+
+                elif concept["reviewed_runs"] > 0:
+                    status = "Reviewed"
 
                 elif concept["passed_runs"] > 0:
                     status = "Passed"
 
-                elif concept["reviewed_runs"] > 0:
-                    status = "Reviewed"
+                elif concept["flagged_runs"] > 0:
+                    status = "Flagged"
 
                 else:
                     status = "In Progress"
@@ -523,6 +594,7 @@ elif page == "Students":
                         "Passed": concept["passed_runs"],
                         "Flagged": concept["flagged_runs"],
                         "Reviewed": concept["reviewed_runs"],
+                        "Pending Review": concept["pending_flags"],
                         "Status": status
                     }
                 )
@@ -735,7 +807,7 @@ elif page == "Concepts":
     )
 
     st.bar_chart(
-        concept_data.set_index("Concept")["Mastery"]
+        concept_data.set_index("Concept")["Performance"]
     )
 
 
@@ -1018,36 +1090,46 @@ elif page == "Class Insights":
         "Aggregated patterns across student learning activity."
     )
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.subheader("Common Difficulties")
-
-        st.write(
-            "• Procedural reasoning in Gram staining"
+    if not concept_performance:
+        st.info(
+            "No class learning data is available yet."
         )
 
-        st.write(
-            "• Connecting conditions with fermentation outcomes"
-        )
+    else:
+        col1, col2 = st.columns(2)
 
-        st.write(
-            "• Understanding purification losses"
-        )
+        with col1:
+            st.subheader("Lower Outcome Areas")
 
-    with col2:
+            lower_areas = sorted(
+                concept_performance,
+                key=lambda concept: concept["performance"]
+            )
 
-        st.subheader("Areas of Strength")
+            for concept in lower_areas:
+                st.write(
+                    f'• {concept["concept_name"]}: '
+                    f'{concept["performance"]}% '
+                    f'across {concept["total_runs"]} run(s)'
+                )
 
-        st.write(
-            "• Protein purification fundamentals"
-        )
+        with col2:
+            st.subheader("Higher Outcome Areas")
 
-        st.write(
-            "• Basic TLC interpretation"
-        )
+            higher_areas = sorted(
+                concept_performance,
+                key=lambda concept: concept["performance"],
+                reverse=True
+            )
 
-        st.write(
-            "• Experimental observation"
+            for concept in higher_areas:
+                st.write(
+                    f'• {concept["concept_name"]}: '
+                    f'{concept["performance"]}% '
+                    f'across {concept["total_runs"]} run(s)'
+                )
+
+        st.caption(
+            "These are run-outcome summaries, not student grades or "
+            "formal mastery scores."
         )
